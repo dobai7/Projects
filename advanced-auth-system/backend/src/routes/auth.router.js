@@ -7,5 +7,8 @@ authRouter.post("/register",validateRegister , authController.registerController
 
 authRouter.post("/login",validateLogin , authController.loginController)
 
+authRouter.post("/refresh-token", authController.refreshTokenController)
+
+
 
 export default authRouter

@@ -22,7 +22,7 @@ const registerController = async (req, res) => {
     const hash = await bcrypt.hash(password, 10)
 
     const user = await userModel.create({
-        username,email,password:hash
+        username, email, password: hash
     })
 
     const accessToken = createAccessToken(user)
@@ -30,7 +30,7 @@ const registerController = async (req, res) => {
     const refreshToken = createRefreshToken(user)
 
     const expiresAt = new Date(
-        Date.now() + 7*24*60*60*1000
+        Date.now() + 7 * 24 * 60 * 60 * 1000
     )
 
     await tokenModel.create({
@@ -57,23 +57,22 @@ const registerController = async (req, res) => {
 
 }
 
-
 const loginController = async (req, res) => {
     const { username, password } = req.body;
 
-    const user = await userModel.findOne({username})
+    const user = await userModel.findOne({ username })
 
-    if(!user){
+    if (!user) {
         return res.status(401).json({
-            message:"user not found"
+            message: "user not found"
         })
     }
 
-    const isCorrectPassword = await bcrypt.compare(password , user.password)
-    
-    if(!isCorrectPassword){
+    const isCorrectPassword = await bcrypt.compare(password, user.password)
+
+    if (!isCorrectPassword) {
         return res.status(401).json({
-            message:"incorrect password"
+            message: "incorrect password"
         })
     }
 
@@ -86,7 +85,7 @@ const loginController = async (req, res) => {
         token: refreshToken,
         userAgent: req.headers["user-agent"],
         ipAddress: req.ip,
-        expiresAt: new Date(Date.now() + 7*24*60*60*1000)
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     })
 
     res.cookie("refreshToken", refreshToken, {
@@ -102,10 +101,169 @@ const loginController = async (req, res) => {
         accessToken,
         refreshToken
     })
-    
+
 }
+
+const refreshTokenController = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    const decoded = jwt.verify(refreshToken, config.jwt_secret)
+
+
+    const token = await tokenModel.findOne({
+        userId: decoded.userId,
+        token: refreshToken
+    })
+
+    if (!token) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    const user = await userModel.findById(decoded.userId)
+
+    if (!user) {
+        return res.status(401).json({
+            message: "user not found"
+        })
+    }
+
+    if (token.isRevoked) {
+        return res.status(401).json({
+            message: "refresh token is revoked"
+        })
+    }
+
+    if (token.expiresAt < new Date()) {
+        return res.status(401).json({
+            message: "refresh token is expired"
+        })
+    }
+
+    const accessToken = createAccessToken(user)
+
+    const newRefreshToken = createRefreshToken(user)
+
+    token.token = newRefreshToken
+    token.userAgent = req.headers["user-agent"]
+    token.ipAddress = req.ip
+    token.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    await token.save()
+
+    res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    })
+
+    res.status(200).json({
+        message: "access token refreshed successfully",
+        accessToken
+    })
+}
+
+const logoutController = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    const decoded = jwt.verify(refreshToken, config.jwt_secret)
+
+    const token = await tokenModel.findOne({
+        userId: decoded.userId,
+        token: refreshToken
+    })
+
+    if (!token) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    if (token.isRevoked) {
+        return res.status(401).json({
+            message: "refresh token is revoked"
+        })
+    }
+
+
+    token.isRevoked = true
+    await token.save()
+
+    res.clearCookie("refreshToken",{
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict"
+    })
+
+    res.status(200).json({
+        message: "user logged out successfully"
+    })
+}
+
+const logoutAllController = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    const decoded = jwt.verify(refreshToken, config.jwt_secret)
+
+    const token = await tokenModel.findOne({
+        userId: decoded.userId,
+        token: refreshToken
+    })
+
+    if (!token) {
+        return res.status(401).json({
+            message: "refresh token not found"
+        })
+    }
+
+    if (token.isRevoked) {
+        return res.status(401).json({
+            message: "refresh token is revoked"
+        })
+    }
+
+    const userId = decoded.userId;
+
+    await tokenModel.updateMany({
+        userId: userId,
+        isRevoked: false
+    }, {
+        isRevoked: true
+    })  
+
+    res.clearCookie("refreshToken",{
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict"
+    })
+
+    res.status(200).json({
+        message: "user logged out from all devices successfully"
+    })
+}
+
 
 export default {
     registerController,
-    loginController
+    loginController,
+    refreshTokenController
 }
