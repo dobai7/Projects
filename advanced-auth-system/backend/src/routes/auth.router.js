@@ -5,7 +5,7 @@ import authController from "../controllers/auth.controller.js"
 
 authRouter.post("/register",validateRegister , authController.registerController)
 
-
+authRouter.post("/login",validateLogin , authController.loginController)
 
 
 export default authRouter

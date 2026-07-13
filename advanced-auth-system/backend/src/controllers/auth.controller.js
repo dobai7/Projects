@@ -1,8 +1,7 @@
 import userModel from "../models/user.model.js";
 import bcrypt from "bcryptjs"
-import config from "../config/index.js"
 import tokenModel from "../models/token.model.js"
-import jwt from "jsonwebtoken"
+import { createAccessToken, createRefreshToken } from "../services/token.service.js";
 
 const registerController = async (req, res) => {
     const { username, email, password } = req.body;
@@ -26,25 +25,9 @@ const registerController = async (req, res) => {
         username,email,password:hash
     })
 
-    const accessToken = jwt.sign(
-        {
-            id : user._id,
-        },
-        config.jwt_secret,
-        {
-            expiresIn: "15m"
-        }
-    )
+    const accessToken = createAccessToken(user)
 
-    const refreshToken = jwt.sign(
-        {
-            id: user._id
-        },
-        config.jwt_secret,
-        {
-            expiresIn: "7d"
-        }
-    )
+    const refreshToken = createRefreshToken(user)
 
     const expiresAt = new Date(
         Date.now() + 7*24*60*60*1000
@@ -94,25 +77,9 @@ const loginController = async (req, res) => {
         })
     }
 
-    const accessToken = jwt.sign(
-        {
-            id : user._id,
-        },
-        config.jwt_secret,
-        {
-            expiresIn: "15m"
-        }
-    )
+    const accessToken = createAccessToken(user)
 
-    const refreshToken = jwt.sign(
-        {
-            id: user._id
-        },
-        config.jwt_secret,
-        {
-            expiresIn: "7d"
-        }
-    )
+    const refreshToken = createRefreshToken(user)
 
     const tokenUser = await tokenModel.create({
         userId: user._id,
